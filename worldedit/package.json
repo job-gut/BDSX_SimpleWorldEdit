@@ -1,0 +1,11 @@
+{
+  "name": "@bdsx/worldedit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "worldedit.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "jobgutworlds",
+  "license": "CC-BY-NC-ND-4.0"
+}
