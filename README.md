@@ -1,5 +1,8 @@
 # BDSX_SimpleWorldEdit
 
+If there's any translation error, Please tell me
+Discord : 00000#9332
+
 How to use?
 
 1. Download the ZIP
