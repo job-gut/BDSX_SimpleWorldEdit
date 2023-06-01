@@ -11,6 +11,12 @@ import { Vec3 } from "bdsx/bds/blockpos";
 
 import { WorldeditLangs } from "./language";
 
+let isProcessing: boolean = false;
+
+events.packetSend(MinecraftPacketIds.Text).on(() => {
+	if (isProcessing === true) return;
+	return CANCEL;
+});
 
 events.serverOpen.on(()=> {
 
@@ -69,13 +75,7 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 		PlaceBlocksOnce += Ytotal;
 	};
 
-
-	let executed = false;
-	
-	events.packetSend(MinecraftPacketIds.Text).on(() => {
-		if (executed === true) return;
-		return CANCEL;
-	});
+	isProcessing = true;
 
 	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
 	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
@@ -102,7 +102,7 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 		fakepl4.simulateDisconnect();
 		fakepl5.simulateDisconnect();
 	
-		executed = true;
+		isProcessing = false;
 	
 		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
 		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.set} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
@@ -163,12 +163,7 @@ command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
 		PlaceBlocksOnce += Ytotal;
 	};
 
-	let executed = false;
-	
-	events.packetSend(MinecraftPacketIds.Text).on(() => {
-		if (executed === true) return;
-		return CANCEL;
-	});
+	isProcessing = true;
 
 	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
 	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
@@ -194,7 +189,8 @@ command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
 		fakepl4.simulateDisconnect();
 		fakepl5.simulateDisconnect();
 		
-		executed = true;
+		isProcessing = false;
+
 		const endTime = Date.now();
 	
 		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
@@ -247,12 +243,7 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 		PlaceBlocksOnce += Ytotal;
 	};
 
-	let executed = false;
-	
-	events.packetSend(MinecraftPacketIds.Text).on(() => {
-		if (executed === true) return;
-		return CANCEL;
-	});
+	isProcessing = true;
 
 	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
 	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
@@ -292,7 +283,8 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 		fakepl4.simulateDisconnect();
 		fakepl5.simulateDisconnect();
 		
-		executed = true;
+		isProcessing = false;
+
 		const endTime = Date.now();
 	
 		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
@@ -353,13 +345,7 @@ command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, 
 		PlaceBlocksOnce += Ytotal;
 	};
 
-
-	let executed = false;
-	
-	events.packetSend(MinecraftPacketIds.Text).on(() => {
-		if (executed === true) return;
-		return CANCEL;
-	});
+	isProcessing = true;
 
 	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
 	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
@@ -385,8 +371,9 @@ command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, 
 		fakepl3.simulateDisconnect();
 		fakepl4.simulateDisconnect();
 		fakepl5.simulateDisconnect();
+
+		isProcessing = false;
 	
-		executed = true;
 	
 		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
 		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.replace} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
@@ -446,7 +433,7 @@ let rclickdelay = false;
 //커맨드 실행 단축어
 const run = bedrockServer.executeCommand
 
-events.attackBlock.on((ev) => {
+events.blockDestroy.on((ev) => {
 	const player = ev.player!;
 	const plname = player.getNameTag();
 	const blockpos = ev.blockPos;
