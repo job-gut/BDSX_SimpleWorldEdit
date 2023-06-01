@@ -430,8 +430,39 @@ const posblocks: any = {};
 //우클 꾹 눌렀을때 메세지 도배 방지
 let rclickdelay = false;
 
-//커맨드 실행 단축어
-const run = bedrockServer.executeCommand
+
+events.attackBlock.on((ev) => {
+	const player = ev.player!;
+	const plname = player.getNameTag();
+	const blockpos = ev.blockPos;
+	const wpname = player.getMainhandSlot().getName();
+	if (player.getCommandPermissionLevel() >= 1) {
+		if (wpname == "minecraft:wooden_axe") {
+			x1[player.getNameTag()] = blockpos.x;
+			y1[player.getNameTag()] = blockpos.y;
+			z1[player.getNameTag()] = blockpos.z;
+			if (x2[player.getNameTag()] !== undefined) {
+				let max1 = Math.max(x2[player.getNameTag()], blockpos.x);
+				let max2 = Math.max(y2[player.getNameTag()], blockpos.y);
+				let max3 = Math.max(z2[player.getNameTag()], blockpos.z);
+				const min1 = Math.min(x2[player.getNameTag()], blockpos.x);
+				const min2 = Math.min(y2[player.getNameTag()], blockpos.y);
+				const min3 = Math.min(z2[player.getNameTag()], blockpos.z);
+				max1++;
+				max2++;
+				max3++;
+				posblocks[player.getNameTag()] = (max1 - min1) * (max2 - min2) * (max3 - min3);
+				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]}) (${posblocks[plname]})`)
+				return CANCEL;
+			} else {
+				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]})`)
+				return CANCEL;
+			}
+		}
+	}
+
+});
+
 
 events.blockDestroy.on((ev) => {
 	const player = ev.player!;
@@ -463,7 +494,7 @@ events.blockDestroy.on((ev) => {
 		}
 	}
 
-})
+});
 
 /*월엣 우클 감지, 좌클감지*/
 
