@@ -4,19 +4,38 @@ import { MinecraftPacketIds } from "bdsx/bds/packetids";
 import { bedrockServer } from "bdsx/launcher";
 import { Command } from "bdsx/bds/command";
 import { CANCEL } from "bdsx/common";
-import { CxxString, int32_t } from "bdsx/nativetype";
+import { CxxString, bool_t, int32_t } from "bdsx/nativetype";
 import { green } from "colors";
 import { ServerPlayer, SimulatedPlayer } from "bdsx/bds/player";
-import { Vec3 } from "bdsx/bds/blockpos";
+import { ChunkPos, Vec3 } from "bdsx/bds/blockpos";
 
 import { WorldeditLangs } from "./language";
+import { ChunkSource, LevelChunk } from "bdsx/bds/chunk";
+import { procHacker } from "bdsx/prochacker";
+import { NativeModule } from "bdsx/dll";
+import * as Path from "path";
 
 let isProcessing: boolean = false;
 
 events.packetSend(MinecraftPacketIds.Text).on(() => {
-	if (isProcessing === true) return;
+	if (isProcessing === true) 
 	return CANCEL;
 });
+
+// enum ChunkLoadMode {
+
+// };
+
+// declare module "bdsx/bds/chunk" {
+// 	interface ChunkSource {
+// 		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
+// 	}
+// };
+
+// ChunkSource.prototype.getOrLoadChunk = 
+// procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
+// 	this: LevelChunk
+// });
 
 events.serverOpen.on(()=> {
 
@@ -415,6 +434,37 @@ command.register('wand', WorldeditLangs.Commands.wand, 1).overload((p, o, op)=> 
 	player.sendMessage(WorldeditLangs.TaskSuccess.wand)
 }, {});
 
+
+// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
+
+// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
+// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
+// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
+
+// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
+
+// 	if (CSource.isChunkSaved(chunkPos)) {
+// 		op.error("TEST ERROR! : Already Saved Chunk");
+// 		return;
+// 	};
+
+// 	if (chunk === null || !chunk.isFullyLoaded()) {
+// 		op.error("TEST ERROR! : NULL Chunk");
+// 		return;
+// 	};
+
+// 	const chunk2 = bSource.getChunk(chunkPos);
+
+// 	// const res = _saveChunk(CSource, chunk);
+
+
+// }, {
+// 	x: int32_t,
+// 	z: int32_t,
+
+// });
+
+
 });
 
 //월엣에 필요한 변수 선언
@@ -537,6 +587,13 @@ events.itemUseOnBlock.on((ev) => {
 		}
 	}
 })
+
+
+const dllLocation = Path.join(__dirname + '/bdsx-pregen.dll');
+const pregenDll = NativeModule.load(dllLocation);
+const _saveChunk: (source: ChunkSource, chunk: LevelChunk) => boolean = pregenDll.getFunction('testSave', bool_t, null, ChunkSource, LevelChunk);
+//Reffered SacriPudding's Pre-Gen Plugin
+
 
 console.log(green("[World Edit] Activated!"));
 
