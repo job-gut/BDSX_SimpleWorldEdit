@@ -4,7 +4,7 @@ import { MinecraftPacketIds } from "bdsx/bds/packetids";
 import { bedrockServer } from "bdsx/launcher";
 import { Command } from "bdsx/bds/command";
 import { CANCEL } from "bdsx/common";
-import { CxxString, bool_t, int32_t } from "bdsx/nativetype";
+import { bool_t, int32_t } from "bdsx/nativetype";
 import { green } from "colors";
 import { ServerPlayer, SimulatedPlayer } from "bdsx/bds/player";
 import { ChunkPos, Vec3 } from "bdsx/bds/blockpos";
@@ -12,8 +12,7 @@ import { ChunkPos, Vec3 } from "bdsx/bds/blockpos";
 import { WorldeditLangs } from "./language";
 import { ChunkSource, LevelChunk } from "bdsx/bds/chunk";
 import { procHacker } from "bdsx/prochacker";
-import { NativeModule } from "bdsx/dll";
-import * as Path from "path";
+import { JsonValue } from "bdsx/bds/connreq";
 
 let isProcessing: boolean = false;
 
@@ -26,16 +25,16 @@ events.packetSend(MinecraftPacketIds.Text).on(() => {
 
 // };
 
-// declare module "bdsx/bds/chunk" {
-// 	interface ChunkSource {
-// 		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
-// 	}
-// };
+declare module "bdsx/bds/chunk" {
+	interface ChunkSource {
+		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
+	}
+};
 
-// ChunkSource.prototype.getOrLoadChunk = 
-// procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
-// 	this: LevelChunk
-// });
+ChunkSource.prototype.getOrLoadChunk = 
+procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
+	this: LevelChunk
+});
 
 events.serverOpen.on(()=> {
 
@@ -62,7 +61,7 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 	let lowZ = Math.min(z2[plname], z1[plname]);
 
 	if (posblocks[plname] <= 32767) {
-		player.runCommand(`fill ${highX} ${highY} ${highZ} ${lowX} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
+		player.runCommand(`fill ${highX} ${highY} ${highZ} ${lowX} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
 		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.set}`);
 		console.log(`${plname} Placed ${posblocks[plname]} Blocks`.magenta);
 		return;
@@ -107,7 +106,7 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 
 		for (let x = lowX; x <= highX; x++) {
 			for (let z = lowZ; z <= highZ;) {
-				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
+				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
 				doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
 				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
 				z += PlaceOnceZ;
@@ -130,7 +129,7 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 
 }, {
 	block: Command.Block,
-	block_states: [CxxString, true]
+	block_states: [JsonValue, true]
 });
 
 command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
@@ -277,21 +276,21 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
 
 				if (x === lowX) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
 					doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
 					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
 					continue;
 				};
 
 				if (x === highX) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
 					doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
 					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
 					continue;
 				};
 
-				player.runCommand(`fill ${x} ${highY} ${lowZ} ${x} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
-				player.runCommand(`fill ${x} ${highY} ${highZ} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states || "[]"}`);
+				player.runCommand(`fill ${x} ${highY} ${lowZ} ${x} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
+				player.runCommand(`fill ${x} ${highY} ${highZ} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
 				doneBlocks += Ytotal*2;
 			};
 		};
@@ -312,7 +311,7 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 	}, 500);
 }, {
 	block : Command.Block,
-	block_states : [CxxString, true]
+	block_states : [JsonValue, true]
 });
 
 command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, op)=> {
@@ -402,7 +401,7 @@ command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, 
 }, {
 	block: Command.Block,
 	replace_block: Command.Block,
-	replace_block_states: [CxxString, true]
+	replace_block_states: [JsonValue, true]
 });
 
 command.register('up', WorldeditLangs.Commands.up, 1).overload((p, o, op)=> {
@@ -434,35 +433,38 @@ command.register('wand', WorldeditLangs.Commands.wand, 1).overload((p, o, op)=> 
 	player.sendMessage(WorldeditLangs.TaskSuccess.wand)
 }, {});
 
+//?addTickToLevelChunk@BlockTickingQueue@@QEAAXAEAVLevelChunk@@AEBVBlockPos@@AEBVBlock@@HH@Z
+//?addToTickingQueue@BlockSource@@QEAAXAEBVBlockPos@@AEBVBlock@@HH_N@Z
 
-// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
+command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
 
-// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
-// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
-// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
+	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
+	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
+	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
 
-// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
+	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
 
-// 	if (CSource.isChunkSaved(chunkPos)) {
-// 		op.error("TEST ERROR! : Already Saved Chunk");
-// 		return;
-// 	};
+	if (CSource.isChunkSaved(chunkPos)) {
+		op.error("TEST ERROR! : Already Saved Chunk");
+		return;
+	};
 
-// 	if (chunk === null || !chunk.isFullyLoaded()) {
-// 		op.error("TEST ERROR! : NULL Chunk");
-// 		return;
-// 	};
+	if (chunk === null || !chunk.isFullyLoaded()) {
+		op.error("TEST ERROR! : NULL Chunk");
+		return;
+	};
 
-// 	const chunk2 = bSource.getChunk(chunkPos);
+	const chunk2 = bSource.getChunk(chunkPos);
 
-// 	// const res = _saveChunk(CSource, chunk);
+	// const res = _saveChunk(CSource, chunk);
 
 
-// }, {
-// 	x: int32_t,
-// 	z: int32_t,
+}, {
+	x: int32_t,
+	z: int32_t,
+	json: JsonValue
 
-// });
+});
 
 
 });
@@ -589,10 +591,10 @@ events.itemUseOnBlock.on((ev) => {
 })
 
 
-const dllLocation = Path.join(__dirname + '/bdsx-pregen.dll');
-const pregenDll = NativeModule.load(dllLocation);
-const _saveChunk: (source: ChunkSource, chunk: LevelChunk) => boolean = pregenDll.getFunction('testSave', bool_t, null, ChunkSource, LevelChunk);
-//Reffered SacriPudding's Pre-Gen Plugin
+// const dllLocation = Path.join(__dirname + '/bdsx-pregen.dll');
+// const pregenDll = NativeModule.load(dllLocation);
+// const _saveChunk: (source: ChunkSource, chunk: LevelChunk) => boolean = pregenDll.getFunction('testSave', bool_t, null, ChunkSource, LevelChunk);
+// //Reffered SacriPudding's Pre-Gen Plugin
 
 
 console.log(green("[World Edit] Activated!"));
