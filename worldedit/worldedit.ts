@@ -21,20 +21,16 @@ events.packetSend(MinecraftPacketIds.Text).on(() => {
 	return CANCEL;
 });
 
-// enum ChunkLoadMode {
-
+// declare module "bdsx/bds/chunk" {
+// 	interface ChunkSource {
+// 		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
+// 	}
 // };
 
-declare module "bdsx/bds/chunk" {
-	interface ChunkSource {
-		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
-	}
-};
-
-ChunkSource.prototype.getOrLoadChunk = 
-procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
-	this: LevelChunk
-});
+// ChunkSource.prototype.getOrLoadChunk = 
+// procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
+// 	this: LevelChunk
+// });
 
 events.serverOpen.on(()=> {
 
@@ -60,13 +56,6 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 	let lowY = Math.min(y2[plname], y1[plname]);
 	let lowZ = Math.min(z2[plname], z1[plname]);
 
-	if (posblocks[plname] <= 32767) {
-		player.runCommand(`fill ${highX} ${highY} ${highZ} ${lowX} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.set}`);
-		console.log(`${plname} Placed ${posblocks[plname]} Blocks`.magenta);
-		return;
-	};
-
 	if (p.block.getName() === "minecraft:tnt") {
 		op.error(WorldeditLangs.Errors.TooManyTNT);
 		return;
@@ -78,15 +67,15 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 	const Ztotal = highZ - lowZ;
 
 	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 0;
+	let PlaceOnceZ = 1;
 
 	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 		if (i === Ztotal) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 
@@ -105,11 +94,15 @@ command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
 		const startTime = Date.now();
 
 		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ;) {
-				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-				doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
+			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+				if (z + PlaceOnceZ > highZ) {
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
+					doneBlocks += (highZ - z + 1) * Ytotal;
+				} else {
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
+					doneBlocks += PlaceBlocksOnce;
+				};
 				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-				z += PlaceOnceZ;
 			};
 		};
 	
@@ -154,32 +147,26 @@ command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
 	let lowY = Math.min(y2[plname], y1[plname]);
 	let lowZ = Math.min(z2[plname], z1[plname]);
 
-	if (posblocks[plname] <= 32767) {
-		player.runCommand(`fill ${highX} ${highY} ${highZ} ${lowX} ${lowY} ${lowZ} air`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.cut}`);
-		return;
-	};
-
 	let doneBlocks = 0;
 
 	const Ytotal = highY - lowY;
 	const Ztotal = highZ - lowZ;
 
 	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 0;
+	let PlaceOnceZ = 1;
 
 	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
-		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i;
-			break;
-		};
-		if (i === Ztotal) {
-			PlaceOnceZ = i;
-			break;
-		};
-
-		PlaceBlocksOnce += Ytotal;
-	};
+	  if (PlaceBlocksOnce + Ytotal > 32767) {
+		PlaceOnceZ = i || 1;
+		break;
+	  }
+	  if (i === Ztotal) {
+		PlaceOnceZ = i || 1;
+		break;
+	  }
+	
+	  PlaceBlocksOnce += Ytotal;
+	}
 
 	isProcessing = true;
 
@@ -193,12 +180,16 @@ command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
 		const startTime = Date.now();
 
 		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ;) {
-				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} air`);
-				doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
+			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+				if (z + PlaceOnceZ > highZ) {
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} air`);
+					doneBlocks += (highZ - z + 1) * Ytotal;
+				} else {
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} air`);
+					doneBlocks += PlaceBlocksOnce;
+				}
 				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-				z += PlaceOnceZ;
-			};
+			}
 		};
 
 		fakepl1.simulateDisconnect();
@@ -246,15 +237,15 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 	const Ztotal = highZ - lowZ;
 
 	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 0;
+	let PlaceOnceZ = 1;
 
 	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 		if (i === Ztotal) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 
@@ -274,26 +265,18 @@ command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=
 
 		for (let x = lowX; x <= highX; x++) {
 			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+				if (x === lowX || x === highX || z === lowZ || z === highZ) {
+					const endZ = Math.min(z + PlaceOnceZ, highZ);
+					const isCeilingOrFloor = (z === lowZ || z === highZ);
+					const startY = isCeilingOrFloor ? highY : lowY;
+					const endY = isCeilingOrFloor ? highY : lowY;
 
-				if (x === lowX) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-					doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
+					player.runCommand(`fill ${x} ${startY} ${z} ${x} ${endY} ${endZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().value().replace("{", "[").replace("}", "]") || "[]"}`);
+					doneBlocks += (endZ - z + 1) * (endY - startY + 1);
 					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-					continue;
-				};
-
-				if (x === highX) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-					doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
-					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-					continue;
-				};
-
-				player.runCommand(`fill ${x} ${highY} ${lowZ} ${x} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-				player.runCommand(`fill ${x} ${highY} ${highZ} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().replace("{", "[").replace("}","]") || "[]"}`);
-				doneBlocks += Ytotal*2;
-			};
-		};
+				}
+			}
+		}
 
 		fakepl1.simulateDisconnect();
 		fakepl2.simulateDisconnect();
@@ -336,27 +319,21 @@ command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, 
 	let lowY = Math.min(y2[plname], y1[plname]);
 	let lowZ = Math.min(z2[plname], z1[plname]);
 
-	if (posblocks[plname] <= 32767) {
-		player.runCommand(`fill ${highX} ${highY} ${highZ} ${lowX} ${lowY} ${lowZ} ${p.block.getName().split(":")[1]} replace ${p.replace_block.getName().split(":")[1]} ${p.replace_block_states || "[]"}`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.replace}`);
-		return;
-	};
-
 	let doneBlocks = 0;
 
 	const Ytotal = highY - lowY;
 	const Ztotal = highZ - lowZ;
 
 	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 0;
+	let PlaceOnceZ = 1;
 
 	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 		if (i === Ztotal) {
-			PlaceOnceZ = i;
+			PlaceOnceZ = i || 1;
 			break;
 		};
 
@@ -375,13 +352,12 @@ command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, 
 		const startTime = Date.now();
 
 		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ;) {
-				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z+PlaceOnceZ <= highZ ? z+PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} replace ${p.replace_block.getName().split(":")[1]} ${p.replace_block_states || "[]"}`);
-				doneBlocks += z+PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - (z+1)) * Ytotal;
+			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ <= highZ ? z + PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} replace ${p.replace_block.getName().split(":")[1]} ${p.replace_block_states || "[]"}`);
+				doneBlocks += z + PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - z) * Ytotal;
 				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-				z += PlaceOnceZ;
-			};
-		};
+			}
+		}
 	
 		const endTime = Date.now();
 		fakepl1.simulateDisconnect();
@@ -436,35 +412,35 @@ command.register('wand', WorldeditLangs.Commands.wand, 1).overload((p, o, op)=> 
 //?addTickToLevelChunk@BlockTickingQueue@@QEAAXAEAVLevelChunk@@AEBVBlockPos@@AEBVBlock@@HH@Z
 //?addToTickingQueue@BlockSource@@QEAAXAEBVBlockPos@@AEBVBlock@@HH_N@Z
 
-command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
+// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
 
-	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
-	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
-	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
+// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
+// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
+// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
 
-	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
+// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
 
-	if (CSource.isChunkSaved(chunkPos)) {
-		op.error("TEST ERROR! : Already Saved Chunk");
-		return;
-	};
+// 	if (CSource.isChunkSaved(chunkPos)) {
+// 		op.error("TEST ERROR! : Already Saved Chunk");
+// 		return;
+// 	};
 
-	if (chunk === null || !chunk.isFullyLoaded()) {
-		op.error("TEST ERROR! : NULL Chunk");
-		return;
-	};
+// 	if (chunk === null || !chunk.isFullyLoaded()) {
+// 		op.error("TEST ERROR! : NULL Chunk");
+// 		return;
+// 	};
 
-	const chunk2 = bSource.getChunk(chunkPos);
+// 	const chunk2 = bSource.getChunk(chunkPos);
 
-	// const res = _saveChunk(CSource, chunk);
+// 	// const res = _saveChunk(CSource, chunk);
 
 
-}, {
-	x: int32_t,
-	z: int32_t,
-	json: JsonValue
+// }, {
+// 	x: int32_t,
+// 	z: int32_t,
+// 	json: JsonValue
 
-});
+// });
 
 
 });
@@ -483,37 +459,37 @@ const posblocks: any = {};
 let rclickdelay = false;
 
 
-events.attackBlock.on((ev) => {
-	const player = ev.player!;
-	const plname = player.getNameTag();
-	const blockpos = ev.blockPos;
-	const wpname = player.getMainhandSlot().getName();
-	if (player.getCommandPermissionLevel() >= 1) {
-		if (wpname == "minecraft:wooden_axe") {
-			x1[player.getNameTag()] = blockpos.x;
-			y1[player.getNameTag()] = blockpos.y;
-			z1[player.getNameTag()] = blockpos.z;
-			if (x2[player.getNameTag()] !== undefined) {
-				let max1 = Math.max(x2[player.getNameTag()], blockpos.x);
-				let max2 = Math.max(y2[player.getNameTag()], blockpos.y);
-				let max3 = Math.max(z2[player.getNameTag()], blockpos.z);
-				const min1 = Math.min(x2[player.getNameTag()], blockpos.x);
-				const min2 = Math.min(y2[player.getNameTag()], blockpos.y);
-				const min3 = Math.min(z2[player.getNameTag()], blockpos.z);
-				max1++;
-				max2++;
-				max3++;
-				posblocks[player.getNameTag()] = (max1 - min1) * (max2 - min2) * (max3 - min3);
-				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]}) (${posblocks[plname]})`)
-				return CANCEL;
-			} else {
-				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]})`)
-				return CANCEL;
-			}
-		}
-	}
+// events.attackBlock.on((ev) => {
+// 	const player = ev.player!;
+// 	const plname = player.getNameTag();
+// 	const blockpos = ev.blockPos;
+// 	const wpname = player.getMainhandSlot().getName();
+// 	if (player.getCommandPermissionLevel() >= 1) {
+// 		if (wpname == "minecraft:wooden_axe") {
+// 			x1[player.getNameTag()] = blockpos.x;
+// 			y1[player.getNameTag()] = blockpos.y;
+// 			z1[player.getNameTag()] = blockpos.z;
+// 			if (x2[player.getNameTag()] !== undefined) {
+// 				let max1 = Math.max(x2[player.getNameTag()], blockpos.x);
+// 				let max2 = Math.max(y2[player.getNameTag()], blockpos.y);
+// 				let max3 = Math.max(z2[player.getNameTag()], blockpos.z);
+// 				const min1 = Math.min(x2[player.getNameTag()], blockpos.x);
+// 				const min2 = Math.min(y2[player.getNameTag()], blockpos.y);
+// 				const min3 = Math.min(z2[player.getNameTag()], blockpos.z);
+// 				max1++;
+// 				max2++;
+// 				max3++;
+// 				posblocks[player.getNameTag()] = (max1 - min1) * (max2 - min2) * (max3 - min3);
+// 				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]}) (${posblocks[plname]})`)
+// 				return CANCEL;
+// 			} else {
+// 				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]})`)
+// 				return CANCEL;
+// 			}
+// 		}
+// 	}
 
-});
+// });
 
 
 events.blockDestroy.on((ev) => {
