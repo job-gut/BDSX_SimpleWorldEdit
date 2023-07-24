@@ -4,13 +4,12 @@ import { MinecraftPacketIds } from "bdsx/bds/packetids";
 import { bedrockServer } from "bdsx/launcher";
 import { Command } from "bdsx/bds/command";
 import { CANCEL } from "bdsx/common";
-import { bool_t, int32_t, uint32_t } from "bdsx/nativetype";
+import { int32_t, uint32_t } from "bdsx/nativetype";
 import { green } from "colors";
 import { ServerPlayer, SimulatedPlayer } from "bdsx/bds/player";
 import { BlockPos, ChunkPos, Vec3 } from "bdsx/bds/blockpos";
 
 import { WorldeditLangs } from "./language";
-import { ChunkSource, LevelChunk } from "bdsx/bds/chunk";
 import { procHacker } from "bdsx/prochacker";
 import { JsonValue } from "bdsx/bds/connreq";
 import { VoidPointer } from "bdsx/core";
@@ -114,17 +113,6 @@ function removeTickingAreas(namePrefix: string = "") {
     }
 }
 
-// declare module "bdsx/bds/chunk" {
-// 	interface ChunkSource {
-// 		getOrLoadChunk(chunkPos: ChunkPos, LoadMode: number, unknown: boolean): LevelChunk
-// 	}
-// };
-
-// ChunkSource.prototype.getOrLoadChunk = 
-// procHacker.js("?getOrLoadChunk@ChunkSource@@UEAA?AV?$shared_ptr@VLevelChunk@@@std@@AEBVChunkPos@@W4LoadMode@1@_N@Z", LevelChunk, {
-// 	this: LevelChunk
-// });
-
 events.serverOpen.on(() => {
 
 	command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op) => {
@@ -161,6 +149,7 @@ events.serverOpen.on(() => {
 		let PlaceBlocksOnce = 0;
 		let PlaceOnceZ = 1;
 
+		const startTime = Date.now();
 		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 			if (PlaceBlocksOnce + Ytotal > 32767 || i === Ztotal) {
 				PlaceOnceZ = i || 1;
@@ -175,7 +164,6 @@ events.serverOpen.on(() => {
 		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
 
 		setTimeout(() => {
-			const startTime = Date.now();
 
 			for (let x = lowX; x <= highX; x++) {
 				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
@@ -235,6 +223,7 @@ events.serverOpen.on(() => {
 		let PlaceBlocksOnce = 0;
 		let PlaceOnceZ = 1;
 
+		const startTime = Date.now();
 		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 			if (PlaceBlocksOnce + Ytotal > 32767) {
 				PlaceOnceZ = i || 1;
@@ -253,7 +242,6 @@ events.serverOpen.on(() => {
 		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
 
 		setTimeout(() => {
-			const startTime = Date.now();
 
 			for (let x = lowX; x <= highX; x++) {
 				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
@@ -268,7 +256,7 @@ events.serverOpen.on(() => {
 				}
 			};
 
-removeTickingAreas("worldeditarea");
+			removeTickingAreas("worldeditarea");
 
 			isProcessing = false;
 
@@ -311,6 +299,7 @@ removeTickingAreas("worldeditarea");
 		let PlaceBlocksOnce = 0;
 		let PlaceOnceZ = 1;
 
+		const startTime = Date.now();
 		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 			if (PlaceBlocksOnce + Ytotal > 32767) {
 				PlaceOnceZ = i || 1;
@@ -329,7 +318,6 @@ removeTickingAreas("worldeditarea");
 		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
 
 		setTimeout(() => {
-			const startTime = Date.now();
 
 			for (let x = lowX; x <= highX; x++) {
 				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
@@ -345,7 +333,7 @@ removeTickingAreas("worldeditarea");
 				}
 			}
 
-removeTickingAreas("worldeditarea");
+			removeTickingAreas("worldeditarea");
 
 			isProcessing = false;
 
@@ -390,6 +378,7 @@ removeTickingAreas("worldeditarea");
 		let PlaceBlocksOnce = 0;
 		let PlaceOnceZ = 1;
 
+		const startTime = Date.now();
 		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
 			if (PlaceBlocksOnce + Ytotal > 32767) {
 				PlaceOnceZ = i || 1;
@@ -408,7 +397,6 @@ removeTickingAreas("worldeditarea");
 		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
 
 		setTimeout(() => {
-			const startTime = Date.now();
 
 			for (let x = lowX; x <= highX; x++) {
 				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
@@ -419,7 +407,7 @@ removeTickingAreas("worldeditarea");
 			}
 
 			const endTime = Date.now();
-removeTickingAreas("worldeditarea");
+			removeTickingAreas("worldeditarea");
 
 			isProcessing = false;
 
@@ -464,40 +452,6 @@ removeTickingAreas("worldeditarea");
 		player.sendMessage(WorldeditLangs.TaskSuccess.wand)
 	}, {});
 
-	//?addTickToLevelChunk@BlockTickingQueue@@QEAAXAEAVLevelChunk@@AEBVBlockPos@@AEBVBlock@@HH@Z
-	//?addToTickingQueue@BlockSource@@QEAAXAEBVBlockPos@@AEBVBlock@@HH_N@Z
-
-	// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
-
-	// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
-	// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
-	// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
-
-	// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
-
-	// 	if (CSource.isChunkSaved(chunkPos)) {
-	// 		op.error("TEST ERROR! : Already Saved Chunk");
-	// 		return;
-	// 	};
-
-	// 	if (chunk === null || !chunk.isFullyLoaded()) {
-	// 		op.error("TEST ERROR! : NULL Chunk");
-	// 		return;
-	// 	};
-
-	// 	const chunk2 = bSource.getChunk(chunkPos);
-
-	// 	// const res = _saveChunk(CSource, chunk);
-
-
-	// }, {
-	// 	x: int32_t,
-	// 	z: int32_t,
-	// 	json: JsonValue
-
-	// });
-
-
 });
 
 //월엣에 필요한 변수 선언
@@ -512,39 +466,6 @@ const posblocks: any = {};
 
 //우클 꾹 눌렀을때 메세지 도배 방지
 let rclickdelay = false;
-
-
-// events.attackBlock.on((ev) => {
-// 	const player = ev.player!;
-// 	const plname = player.getNameTag();
-// 	const blockpos = ev.blockPos;
-// 	const wpname = player.getMainhandSlot().getName();
-// 	if (player.getCommandPermissionLevel() >= 1) {
-// 		if (wpname == "minecraft:wooden_axe") {
-// 			x1[player.getNameTag()] = blockpos.x;
-// 			y1[player.getNameTag()] = blockpos.y;
-// 			z1[player.getNameTag()] = blockpos.z;
-// 			if (x2[player.getNameTag()] !== undefined) {
-// 				let max1 = Math.max(x2[player.getNameTag()], blockpos.x);
-// 				let max2 = Math.max(y2[player.getNameTag()], blockpos.y);
-// 				let max3 = Math.max(z2[player.getNameTag()], blockpos.z);
-// 				const min1 = Math.min(x2[player.getNameTag()], blockpos.x);
-// 				const min2 = Math.min(y2[player.getNameTag()], blockpos.y);
-// 				const min3 = Math.min(z2[player.getNameTag()], blockpos.z);
-// 				max1++;
-// 				max2++;
-// 				max3++;
-// 				posblocks[player.getNameTag()] = (max1 - min1) * (max2 - min2) * (max3 - min3);
-// 				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]}) (${posblocks[plname]})`)
-// 				return CANCEL;
-// 			} else {
-// 				player.sendMessage(`${WorldeditLangs.TaskSuccess.setFirstPos} (${x1[plname]}, ${y1[plname]}, ${z1[plname]})`)
-// 				return CANCEL;
-// 			}
-// 		}
-// 	}
-
-// });
 
 
 events.blockDestroy.on((ev) => {
@@ -620,12 +541,6 @@ events.itemUseOnBlock.on((ev) => {
 		}
 	}
 })
-
-
-// const dllLocation = Path.join(__dirname + '/bdsx-pregen.dll');
-// const pregenDll = NativeModule.load(dllLocation);
-// const _saveChunk: (source: ChunkSource, chunk: LevelChunk) => boolean = pregenDll.getFunction('testSave', bool_t, null, ChunkSource, LevelChunk);
-// //Reffered SacriPudding's Pre-Gen Plugin
 
 
 console.log(green("[World Edit] Activated!"));
