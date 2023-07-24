@@ -4,22 +4,115 @@ import { MinecraftPacketIds } from "bdsx/bds/packetids";
 import { bedrockServer } from "bdsx/launcher";
 import { Command } from "bdsx/bds/command";
 import { CANCEL } from "bdsx/common";
-import { bool_t, int32_t } from "bdsx/nativetype";
+import { bool_t, int32_t, uint32_t } from "bdsx/nativetype";
 import { green } from "colors";
 import { ServerPlayer, SimulatedPlayer } from "bdsx/bds/player";
-import { ChunkPos, Vec3 } from "bdsx/bds/blockpos";
+import { BlockPos, ChunkPos, Vec3 } from "bdsx/bds/blockpos";
 
 import { WorldeditLangs } from "./language";
 import { ChunkSource, LevelChunk } from "bdsx/bds/chunk";
 import { procHacker } from "bdsx/prochacker";
 import { JsonValue } from "bdsx/bds/connreq";
+import { VoidPointer } from "bdsx/core";
 
 let isProcessing: boolean = false;
 
 events.packetSend(MinecraftPacketIds.Text).on(() => {
-	if (isProcessing === true) 
-	return CANCEL;
+	if (isProcessing === true)
+		return CANCEL;
 });
+
+procHacker.hooking('?countActiveStandaloneTickingAreas@TickingAreasManager@@QEBAIXZ', uint32_t, {this: VoidPointer})(on_get_count);
+procHacker.hooking('?countStandaloneTickingAreas@TickingAreasManager@@QEBAIXZ', uint32_t, {this: VoidPointer})(on_get_count);
+
+function on_get_count(this: VoidPointer) {
+    return 1;
+}
+
+const pluginTickingAreaNames: string[] = [];
+
+class AreaData {
+    name: string;
+    pos1: {x: number, z: number};
+    pos2: {x: number, z: number};
+
+    constructor(name:string, pos1: {x: number, z: number}, pos2: {x: number, z: number}) {
+        this.name = name;
+        this.pos1 = pos1;
+        this.pos2 = pos2;
+    }
+}
+
+function createTickingAreas(namePrefix: string, pos1: {x: number, z: number}, pos2: {x: number, z: number}) {
+    let chunkPos1 = ChunkPos.create(
+        BlockPos.create(
+            pos1.x,
+            0,
+            pos1.z,
+        )
+    )
+
+    let chunkPos2 = ChunkPos.create(
+        BlockPos.create(
+            pos2.x,
+            0,
+            pos2.z,
+        )
+    )
+
+    let totalWidth = Math.abs(chunkPos1.x - chunkPos2.x) + 1;
+    let totalHeight = Math.abs(chunkPos1.z - chunkPos2.z) + 1;
+
+    let areas: AreaData[] = [];
+
+    let z = 0;
+    while (z < totalHeight) {
+        const remainingHeight = totalHeight - z;
+        const handlingHeight = Math.min(remainingHeight, 10);
+        let x = 0;
+        while (x < totalWidth) {
+            const name = namePrefix + pluginTickingAreaNames.length;
+            pluginTickingAreaNames.push(name);
+
+            const remainingWidth = totalWidth - x;
+            const handlingWidth = Math.min(remainingWidth, 10);
+
+            const originPos = {
+                x: (chunkPos1.x * 16) + (x * 16),
+                z: (chunkPos1.z * 16) + (z * 16),
+            }
+
+            x += handlingWidth;
+
+            const endPos = {
+                x: originPos.x + (handlingWidth * 16) - 1,
+                z: originPos.z + (handlingHeight * 16) -1,
+            }
+
+            areas.push(new AreaData(name, originPos, endPos));
+        }
+        z += handlingHeight;
+    }
+
+    for (const data of areas) {
+        const command = `tickingarea add ` +
+            `${data.pos1.x} 0 ${data.pos1.z} ` +
+            `${data.pos2.x} 0 ${data.pos2.z} ` +
+            `${data.name}`;
+
+        bedrockServer.executeCommand(command);
+    }
+}
+
+function removeTickingAreas(namePrefix: string = "") {
+    for (let name of pluginTickingAreaNames) {
+        if (name.startsWith(namePrefix)) {
+            const command = `tickingarea remove ${name}`;
+
+            bedrockServer.executeCommand(command);
+        }
+    }
+}
 
 // declare module "bdsx/bds/chunk" {
 // 	interface ChunkSource {
@@ -32,415 +125,377 @@ events.packetSend(MinecraftPacketIds.Text).on(() => {
 // 	this: LevelChunk
 // });
 
-events.serverOpen.on(()=> {
+events.serverOpen.on(() => {
 
-command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole);
-		return;
-	};
-
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
-
-	const plname = player.getNameTag();
-	if (typeof posblocks[plname] !== 'number') {
-		op.error(WorldeditLangs.Errors.notSettedBothPosition);
-		return;
-	};
-
-	let highX = Math.max(x2[plname], x1[plname]);
-	let highY = Math.max(y2[plname], y1[plname]);
-	let highZ = Math.max(z2[plname], z1[plname]);
-	let lowX = Math.min(x2[plname], x1[plname]);
-	let lowY = Math.min(y2[plname], y1[plname]);
-	let lowZ = Math.min(z2[plname], z1[plname]);
-
-	if (p.block.getName() === "minecraft:tnt") {
-		op.error(WorldeditLangs.Errors.TooManyTNT);
-		return;
-	};
-
-	let doneBlocks = 0;
-
-	const Ytotal = highY - lowY;
-	const Ztotal = highZ - lowZ;
-
-	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 1;
-
-	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
-		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i || 1;
-			break;
-		};
-		if (i === Ztotal) {
-			PlaceOnceZ = i || 1;
-			break;
+	command.register("set", WorldeditLangs.Commands.set, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole);
+			return;
 		};
 
-		PlaceBlocksOnce += Ytotal;
-	};
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
 
-	isProcessing = true;
-
-	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl3 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl4 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl5 = SimulatedPlayer.create("", Vec3.create({x: (highX+lowX)/2, y: highY, z: (lowZ+highZ)/2}), player.getDimensionId());
-
-	setTimeout(()=> {
-		const startTime = Date.now();
-
-		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
-				if (z + PlaceOnceZ > highZ) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
-					doneBlocks += (highZ - z + 1) * Ytotal;
-				} else {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
-					doneBlocks += PlaceBlocksOnce;
-				};
-				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-			};
+		const plname = player.getNameTag();
+		if (typeof posblocks[plname] !== 'number') {
+			op.error(WorldeditLangs.Errors.notSettedBothPosition);
+			return;
 		};
-	
-		const endTime = Date.now();
-		fakepl1.simulateDisconnect();
-		fakepl2.simulateDisconnect();
-		fakepl3.simulateDisconnect();
-		fakepl4.simulateDisconnect();
-		fakepl5.simulateDisconnect();
-	
-		isProcessing = false;
-	
-		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.set} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
-		console.log(`${plname} Placed ${posblocks[plname]} Blocks (${((endTime - startTime)/1000).toFixed(2)} seconds)`.magenta);
-	}, 500);
 
-}, {
-	block: Command.Block,
-	block_states: [JsonValue, true]
-});
+		let highX = Math.max(x2[plname], x1[plname]);
+		let highY = Math.max(y2[plname], y1[plname]);
+		let highZ = Math.max(z2[plname], z1[plname]);
+		let lowX = Math.min(x2[plname], x1[plname]);
+		let lowY = Math.min(y2[plname], y1[plname]);
+		let lowZ = Math.min(z2[plname], z1[plname]);
 
-command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole)
-		return;
-	};
+		if (p.block.getName() === "minecraft:tnt") {
+			op.error(WorldeditLangs.Errors.TooManyTNT);
+			return;
+		};
 
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
+		let doneBlocks = 0;
 
-	const plname = player.getNameTag();
-	if (typeof posblocks[plname] !== 'number') {
-		op.error(WorldeditLangs.Errors.notSettedBothPosition);
-		return;
-	};
+		const Ytotal = highY - lowY;
+		const Ztotal = highZ - lowZ;
+		let PlaceBlocksOnce = 0;
+		let PlaceOnceZ = 1;
 
-	let highX = Math.max(x2[plname], x1[plname]);
-	let highY = Math.max(y2[plname], y1[plname]);
-	let highZ = Math.max(z2[plname], z1[plname]);
-	let lowX = Math.min(x2[plname], x1[plname]);
-	let lowY = Math.min(y2[plname], y1[plname]);
-	let lowZ = Math.min(z2[plname], z1[plname]);
-
-	let doneBlocks = 0;
-
-	const Ytotal = highY - lowY;
-	const Ztotal = highZ - lowZ;
-
-	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 1;
-
-	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
-	  if (PlaceBlocksOnce + Ytotal > 32767) {
-		PlaceOnceZ = i || 1;
-		break;
-	  }
-	  if (i === Ztotal) {
-		PlaceOnceZ = i || 1;
-		break;
-	  }
-	
-	  PlaceBlocksOnce += Ytotal;
-	}
-
-	isProcessing = true;
-
-	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl3 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl4 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl5 = SimulatedPlayer.create("", Vec3.create({x: (highX+lowX)/2, y: highY, z: (lowZ+highZ)/2}), player.getDimensionId());
-
-	setTimeout(()=> {
-		const startTime = Date.now();
-
-		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
-				if (z + PlaceOnceZ > highZ) {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} air`);
-					doneBlocks += (highZ - z + 1) * Ytotal;
-				} else {
-					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} air`);
-					doneBlocks += PlaceBlocksOnce;
-				}
-				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
+		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
+			if (PlaceBlocksOnce + Ytotal > 32767 || i === Ztotal) {
+				PlaceOnceZ = i || 1;
+				break;
 			}
+
+			PlaceBlocksOnce += Ytotal;
+		}
+
+		isProcessing = true;
+
+		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
+
+		setTimeout(() => {
+			const startTime = Date.now();
+
+			for (let x = lowX; x <= highX; x++) {
+				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+					if (z + PlaceOnceZ > highZ) {
+						player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
+						doneBlocks += (highZ - z + 1) * Ytotal;
+					} else {
+						player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().toString().replace("{", "[").replace("}", "]") || []}`);
+						doneBlocks += PlaceBlocksOnce;
+					};
+					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
+				};
+			};
+
+			const endTime = Date.now();
+			removeTickingAreas("worldeditarea");
+
+			isProcessing = false;
+
+			player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
+			player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.set} (${((endTime - startTime) / 1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
+			console.log(`${plname} Placed ${posblocks[plname]} Blocks (${((endTime - startTime) / 1000).toFixed(2)} seconds)`.magenta);
+		}, 500);
+
+	}, {
+		block: Command.Block,
+		block_states: [JsonValue, true]
+	});
+
+	command.register("cut", WorldeditLangs.Commands.cut, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole)
+			return;
 		};
 
-		fakepl1.simulateDisconnect();
-		fakepl2.simulateDisconnect();
-		fakepl3.simulateDisconnect();
-		fakepl4.simulateDisconnect();
-		fakepl5.simulateDisconnect();
-		
-		isProcessing = false;
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
 
-		const endTime = Date.now();
-	
-		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.cut} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
-		console.log(`${plname} Cutted ${posblocks[plname]} Blocks (${((endTime - startTime)/1000).toFixed(2)} seconds)`.magenta);
-	}, 500);
-}, {
-});
-
-command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole)
-		return;
-	};
-
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
-
-	const plname = player.getNameTag();
-	if (typeof posblocks[plname] !== 'number') {
-		op.error(WorldeditLangs.Errors.notSettedBothPosition);
-		return;
-	};
-
-	let highX = Math.max(x2[plname], x1[plname]);
-	let highY = Math.max(y2[plname], y1[plname]);
-	let highZ = Math.max(z2[plname], z1[plname]);
-	let lowX = Math.min(x2[plname], x1[plname]);
-	let lowY = Math.min(y2[plname], y1[plname]);
-	let lowZ = Math.min(z2[plname], z1[plname]);
-
-	let doneBlocks = 0;
-
-	const Ytotal = highY - lowY;
-	const Ztotal = highZ - lowZ;
-
-	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 1;
-
-	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
-		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i || 1;
-			break;
-		};
-		if (i === Ztotal) {
-			PlaceOnceZ = i || 1;
-			break;
+		const plname = player.getNameTag();
+		if (typeof posblocks[plname] !== 'number') {
+			op.error(WorldeditLangs.Errors.notSettedBothPosition);
+			return;
 		};
 
-		PlaceBlocksOnce += Ytotal;
-	};
+		let highX = Math.max(x2[plname], x1[plname]);
+		let highY = Math.max(y2[plname], y1[plname]);
+		let highZ = Math.max(z2[plname], z1[plname]);
+		let lowX = Math.min(x2[plname], x1[plname]);
+		let lowY = Math.min(y2[plname], y1[plname]);
+		let lowZ = Math.min(z2[plname], z1[plname]);
 
-	isProcessing = true;
+		let doneBlocks = 0;
 
-	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl3 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl4 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl5 = SimulatedPlayer.create("", Vec3.create({x: (highX+lowX)/2, y: highY, z: (lowZ+highZ)/2}), player.getDimensionId());
+		const Ytotal = highY - lowY;
+		const Ztotal = highZ - lowZ;
 
-	setTimeout(()=> {
-		const startTime = Date.now();
+		let PlaceBlocksOnce = 0;
+		let PlaceOnceZ = 1;
 
-		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
-				if (x === lowX || x === highX || z === lowZ || z === highZ) {
-					const endZ = Math.min(z + PlaceOnceZ, highZ);
-					const isCeilingOrFloor = (z === lowZ || z === highZ);
-					const startY = isCeilingOrFloor ? highY : lowY;
-					const endY = isCeilingOrFloor ? highY : lowY;
+		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
+			if (PlaceBlocksOnce + Ytotal > 32767) {
+				PlaceOnceZ = i || 1;
+				break;
+			}
+			if (i === Ztotal) {
+				PlaceOnceZ = i || 1;
+				break;
+			}
 
-					player.runCommand(`fill ${x} ${startY} ${z} ${x} ${endY} ${endZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().value().replace("{", "[").replace("}", "]") || "[]"}`);
-					doneBlocks += (endZ - z + 1) * (endY - startY + 1);
+			PlaceBlocksOnce += Ytotal;
+		}
+
+		isProcessing = true;
+
+		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
+
+		setTimeout(() => {
+			const startTime = Date.now();
+
+			for (let x = lowX; x <= highX; x++) {
+				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+					if (z + PlaceOnceZ > highZ) {
+						player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${highZ} air`);
+						doneBlocks += (highZ - z + 1) * Ytotal;
+					} else {
+						player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ} air`);
+						doneBlocks += PlaceBlocksOnce;
+					}
+					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
+				}
+			};
+
+removeTickingAreas("worldeditarea");
+
+			isProcessing = false;
+
+			const endTime = Date.now();
+
+			player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
+			player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.cut} (${((endTime - startTime) / 1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
+			console.log(`${plname} Cutted ${posblocks[plname]} Blocks (${((endTime - startTime) / 1000).toFixed(2)} seconds)`.magenta);
+		}, 500);
+	}, {
+	});
+
+	command.register("walls", WorldeditLangs.Commands.walls, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole)
+			return;
+		};
+
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
+
+		const plname = player.getNameTag();
+		if (typeof posblocks[plname] !== 'number') {
+			op.error(WorldeditLangs.Errors.notSettedBothPosition);
+			return;
+		};
+
+		let highX = Math.max(x2[plname], x1[plname]);
+		let highY = Math.max(y2[plname], y1[plname]);
+		let highZ = Math.max(z2[plname], z1[plname]);
+		let lowX = Math.min(x2[plname], x1[plname]);
+		let lowY = Math.min(y2[plname], y1[plname]);
+		let lowZ = Math.min(z2[plname], z1[plname]);
+
+		let doneBlocks = 0;
+
+		const Ytotal = highY - lowY;
+		const Ztotal = highZ - lowZ;
+
+		let PlaceBlocksOnce = 0;
+		let PlaceOnceZ = 1;
+
+		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
+			if (PlaceBlocksOnce + Ytotal > 32767) {
+				PlaceOnceZ = i || 1;
+				break;
+			};
+			if (i === Ztotal) {
+				PlaceOnceZ = i || 1;
+				break;
+			};
+
+			PlaceBlocksOnce += Ytotal;
+		};
+
+		isProcessing = true;
+
+		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
+
+		setTimeout(() => {
+			const startTime = Date.now();
+
+			for (let x = lowX; x <= highX; x++) {
+				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+					if (x === lowX || x === highX || z === lowZ || z >= highZ) {
+						const endZ = Math.min(z + PlaceOnceZ, highZ);
+						const startY = lowY;
+						const endY = highY;
+
+						player.runCommand(`fill ${x} ${startY} ${z} ${x} ${endY} ${endZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().value().replace("{", "[").replace("}", "]") || "[]"}`);
+						doneBlocks += (endZ - z + 1) * (endY - startY + 1);
+						player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
+					}
+				}
+			}
+
+removeTickingAreas("worldeditarea");
+
+			isProcessing = false;
+
+			const endTime = Date.now();
+
+			player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
+			player.sendMessage(`§d${doneBlocks} ${WorldeditLangs.TaskSuccess.set} (${((endTime - startTime) / 1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
+			console.log(`${plname} Walled ${doneBlocks} Blocks (${((endTime - startTime) / 1000).toFixed(2)} seconds)`.magenta);
+		}, 500);
+	}, {
+		block: Command.Block,
+		block_states: [JsonValue, true]
+	});
+
+	command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole)
+			return;
+		};
+
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
+
+		const plname = player.getNameTag();
+		if (typeof posblocks[plname] !== 'number') {
+			op.error(WorldeditLangs.Errors.notSettedBothPosition);
+			return;
+		};
+
+		let highX = Math.max(x2[plname], x1[plname]);
+		let highY = Math.max(y2[plname], y1[plname]);
+		let highZ = Math.max(z2[plname], z1[plname]);
+		let lowX = Math.min(x2[plname], x1[plname]);
+		let lowY = Math.min(y2[plname], y1[plname]);
+		let lowZ = Math.min(z2[plname], z1[plname]);
+
+		let doneBlocks = 0;
+
+		const Ytotal = highY - lowY;
+		const Ztotal = highZ - lowZ;
+
+		let PlaceBlocksOnce = 0;
+		let PlaceOnceZ = 1;
+
+		for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
+			if (PlaceBlocksOnce + Ytotal > 32767) {
+				PlaceOnceZ = i || 1;
+				break;
+			};
+			if (i === Ztotal) {
+				PlaceOnceZ = i || 1;
+				break;
+			};
+
+			PlaceBlocksOnce += Ytotal;
+		};
+
+		isProcessing = true;
+
+		createTickingAreas("worldeditarea", {x: lowX, z: lowZ}, {x: highX, z:highZ});
+
+		setTimeout(() => {
+			const startTime = Date.now();
+
+			for (let x = lowX; x <= highX; x++) {
+				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
+					player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ <= highZ ? z + PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} replace ${p.replace_block.getName().split(":")[1]} ${p.replace_block_states || "[]"}`);
+					doneBlocks += z + PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - z) * Ytotal;
 					player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
 				}
 			}
-		}
 
-		fakepl1.simulateDisconnect();
-		fakepl2.simulateDisconnect();
-		fakepl3.simulateDisconnect();
-		fakepl4.simulateDisconnect();
-		fakepl5.simulateDisconnect();
-		
-		isProcessing = false;
+			const endTime = Date.now();
+removeTickingAreas("worldeditarea");
 
-		const endTime = Date.now();
-	
-		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
-		player.sendMessage(`§d${doneBlocks} ${WorldeditLangs.TaskSuccess.set} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
-		console.log(`${plname} Walled ${doneBlocks} Blocks (${((endTime - startTime)/1000).toFixed(2)} seconds)`.magenta);
-	}, 500);
-}, {
-	block : Command.Block,
-	block_states : [JsonValue, true]
-});
+			isProcessing = false;
 
-command.register("replace", WorldeditLangs.Commands.replace, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole)
-		return;
-	};
 
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
+			player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
+			player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.replace} (${((endTime - startTime) / 1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
+			console.log(`${plname} Replaced ${posblocks[plname]} Blocks (${((endTime - startTime) / 1000).toFixed(2)} seconds)`.magenta);
+		}, 500);
 
-	const plname = player.getNameTag();
-	if (typeof posblocks[plname] !== 'number') {
-		op.error(WorldeditLangs.Errors.notSettedBothPosition);
-		return;
-	};
+	}, {
+		block: Command.Block,
+		replace_block: Command.Block,
+		replace_block_states: [JsonValue, true]
+	});
 
-	let highX = Math.max(x2[plname], x1[plname]);
-	let highY = Math.max(y2[plname], y1[plname]);
-	let highZ = Math.max(z2[plname], z1[plname]);
-	let lowX = Math.min(x2[plname], x1[plname]);
-	let lowY = Math.min(y2[plname], y1[plname]);
-	let lowZ = Math.min(z2[plname], z1[plname]);
-
-	let doneBlocks = 0;
-
-	const Ytotal = highY - lowY;
-	const Ztotal = highZ - lowZ;
-
-	let PlaceBlocksOnce = 0;
-	let PlaceOnceZ = 1;
-
-	for (let i = 0; PlaceBlocksOnce <= 32767; i++) {
-		if (PlaceBlocksOnce + Ytotal > 32767) {
-			PlaceOnceZ = i || 1;
-			break;
-		};
-		if (i === Ztotal) {
-			PlaceOnceZ = i || 1;
-			break;
+	command.register('up', WorldeditLangs.Commands.up, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole)
+			return;
 		};
 
-		PlaceBlocksOnce += Ytotal;
-	};
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
 
-	isProcessing = true;
+		player.runCommand(`setblock ~ ~${p.blocks - 1} ~ glass`);
+		player.runCommand(`tp ~ ~${p.blocks} ~`);
+		player.sendMessage("§dWooosh!");
+	}, {
+		blocks: int32_t
+	});
 
-	const fakepl1 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl2 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl3 = SimulatedPlayer.create("", Vec3.create({x: lowX, y: highY, z: highZ}), player.getDimensionId());
-	const fakepl4 = SimulatedPlayer.create("", Vec3.create({x: highX, y: highY, z: lowZ}), player.getDimensionId());
-	const fakepl5 = SimulatedPlayer.create("", Vec3.create({x: (highX+lowX)/2, y: highY, z: (lowZ+highZ)/2}), player.getDimensionId());
+	command.register('wand', WorldeditLangs.Commands.wand, 1).overload((p, o, op) => {
+		if (o.isServerCommandOrigin()) {
+			op.error(WorldeditLangs.Errors.ifConsole)
+			return;
+		};
 
-	setTimeout(()=> {
-		const startTime = Date.now();
+		const player = o.getEntity() as ServerPlayer;
+		if (!player.isPlayer()) return;
 
-		for (let x = lowX; x <= highX; x++) {
-			for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
-				player.runCommand(`fill ${x} ${highY} ${z} ${x} ${lowY} ${z + PlaceOnceZ <= highZ ? z + PlaceOnceZ : highZ} ${p.block.getName().split(":")[1]} replace ${p.replace_block.getName().split(":")[1]} ${p.replace_block_states || "[]"}`);
-				doneBlocks += z + PlaceOnceZ <= highZ ? PlaceBlocksOnce : (highZ - z) * Ytotal;
-				player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
-			}
-		}
-	
-		const endTime = Date.now();
-		fakepl1.simulateDisconnect();
-		fakepl2.simulateDisconnect();
-		fakepl3.simulateDisconnect();
-		fakepl4.simulateDisconnect();
-		fakepl5.simulateDisconnect();
+		player.runCommand("give @s wooden_axe 1");
+		player.sendMessage(WorldeditLangs.TaskSuccess.wand)
+	}, {});
 
-		isProcessing = false;
-	
-	
-		player.sendActionbar(`§a[ ${posblocks[plname]} / ${posblocks[plname]} ]`);
-		player.sendMessage(`§d${posblocks[plname]} ${WorldeditLangs.TaskSuccess.replace} (${((endTime - startTime)/1000).toFixed(2)} ${WorldeditLangs.TaskSuccess.usedTime})`);
-		console.log(`${plname} Replaced ${posblocks[plname]} Blocks (${((endTime - startTime)/1000).toFixed(2)} seconds)`.magenta);
-	}, 500);
+	//?addTickToLevelChunk@BlockTickingQueue@@QEAAXAEAVLevelChunk@@AEBVBlockPos@@AEBVBlock@@HH@Z
+	//?addToTickingQueue@BlockSource@@QEAAXAEBVBlockPos@@AEBVBlock@@HH_N@Z
 
-}, {
-	block: Command.Block,
-	replace_block: Command.Block,
-	replace_block_states: [JsonValue, true]
-});
+	// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
 
-command.register('up', WorldeditLangs.Commands.up, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole)
-		return;
-	};
+	// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
+	// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
+	// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
 
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
+	// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
 
-	player.runCommand(`setblock ~ ~${p.blocks - 1} ~ glass`);
-	player.runCommand(`tp ~ ~${p.blocks} ~`);
-	player.sendMessage("§dWooosh!");	
-}, {
-	blocks: int32_t
-});
+	// 	if (CSource.isChunkSaved(chunkPos)) {
+	// 		op.error("TEST ERROR! : Already Saved Chunk");
+	// 		return;
+	// 	};
 
-command.register('wand', WorldeditLangs.Commands.wand, 1).overload((p, o, op)=> {
-	if (o.isServerCommandOrigin()) {
-		op.error(WorldeditLangs.Errors.ifConsole)
-		return;
-	};
+	// 	if (chunk === null || !chunk.isFullyLoaded()) {
+	// 		op.error("TEST ERROR! : NULL Chunk");
+	// 		return;
+	// 	};
 
-	const player = o.getEntity() as ServerPlayer;
-	if (!player.isPlayer()) return;
+	// 	const chunk2 = bSource.getChunk(chunkPos);
 
-	player.runCommand("give @s wooden_axe 1");
-	player.sendMessage(WorldeditLangs.TaskSuccess.wand)
-}, {});
-
-//?addTickToLevelChunk@BlockTickingQueue@@QEAAXAEAVLevelChunk@@AEBVBlockPos@@AEBVBlock@@HH@Z
-//?addToTickingQueue@BlockSource@@QEAAXAEBVBlockPos@@AEBVBlock@@HH_N@Z
-
-// command.register("test", "test for worldedit", 1).overload((p, o, op)=> {
-
-// 	const chunkPos = ChunkPos.create(Vec3.create({x: p.x, y: 0, z: p.z}));
-// 	const bSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getBlockSource();
-// 	const CSource = bedrockServer.level.getDimension(o.getDimension().getDimensionId())!.getChunkSource();
-
-// 	const chunk = CSource.getOrLoadChunk(chunkPos, 0, true);
-
-// 	if (CSource.isChunkSaved(chunkPos)) {
-// 		op.error("TEST ERROR! : Already Saved Chunk");
-// 		return;
-// 	};
-
-// 	if (chunk === null || !chunk.isFullyLoaded()) {
-// 		op.error("TEST ERROR! : NULL Chunk");
-// 		return;
-// 	};
-
-// 	const chunk2 = bSource.getChunk(chunkPos);
-
-// 	// const res = _saveChunk(CSource, chunk);
+	// 	// const res = _saveChunk(CSource, chunk);
 
 
-// }, {
-// 	x: int32_t,
-// 	z: int32_t,
-// 	json: JsonValue
+	// }, {
+	// 	x: int32_t,
+	// 	z: int32_t,
+	// 	json: JsonValue
 
-// });
+	// });
 
 
 });
