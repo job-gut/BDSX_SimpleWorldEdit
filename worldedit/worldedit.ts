@@ -137,7 +137,7 @@ events.serverOpen.on(() => {
 		let lowY = Math.min(y2[plname], y1[plname]);
 		let lowZ = Math.min(z2[plname], z1[plname]);
 
-		if (p.block.getName() === "minecraft:tnt") {
+		if (p.block.getName() === "minecraft:tnt" && posblocks[plname] > 32767) {
 			op.error(WorldeditLangs.Errors.TooManyTNT);
 			return;
 		};
