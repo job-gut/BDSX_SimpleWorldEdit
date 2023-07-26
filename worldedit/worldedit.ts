@@ -320,14 +320,11 @@ events.serverOpen.on(() => {
 		setTimeout(() => {
 
 			for (let x = lowX; x <= highX; x++) {
-				for (let z = lowZ; z <= highZ; z += PlaceOnceZ) {
-					if (x === lowX || x === highX || z === lowZ || z >= highZ) {
-						const endZ = Math.min(z + PlaceOnceZ, highZ);
-						const startY = lowY;
-						const endY = highY;
+				for (let z = lowZ; z <= highZ; z++) {
+					if (x === lowX || x === highX || z === lowZ || z == highZ) {
 
-						player.runCommand(`fill ${x} ${startY} ${z} ${x} ${endY} ${endZ} ${p.block.getName().split(":")[1]} ${p.block_states?.value().value().replace("{", "[").replace("}", "]") || "[]"}`);
-						doneBlocks += (endZ - z + 1) * (endY - startY + 1);
+						player.runCommand(`fill ${x} ${lowY} ${z} ${x} ${highY} ${z} ${p.block.getName().split(":")[1]} ${p.block_states?.value().value().replace("{", "[").replace("}", "]") || "[]"}`);
+						doneBlocks += Ytotal+1;
 						player.sendActionbar(`§a[ ${doneBlocks} / ${posblocks[plname]} ]`);
 					}
 				}
