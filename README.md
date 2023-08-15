@@ -18,5 +18,3 @@ How to use?
 3. worldedit 폴더를 통째로 bdsx 안에 있는 plugins 폴더에 옮깁니다
 4. 당신이 사용할 언어를 language.ts 안에서 선택합니다.
 5. 이제 서버를 켜세요! 작동할 것입니다!
-
-~~워터눕 병신~~
